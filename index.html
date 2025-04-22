@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Wedding Expense Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(to bottom right, #fce3ec, #ffe6fa);
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .card {
+      background-color: rgba(255, 255, 255, 0.9);
+      border-radius: 1rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+    }
+    .hidden {
+      display: none;
+    }
+    table {
+      width: 100%;
+    }
+  </style>
+</head>
+<body class="p-6">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    <h1 class="text-4xl text-center font-bold text-pink-700">💒 Wedding Budget Dashboard</h1>
+
+    <div class="card">
+      <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input id="item" type="text" placeholder="Keperluan" class="border rounded p-2" required>
+        <input id="amount" type="number" placeholder="Jumlah (Rp)" class="border rounded p-2" required>
+        <select id="category" class="border rounded p-2" required>
+          <option value="" disabled selected>Pilih Kategori</option>
+          <option value="Dekorasi">Dekorasi</option>
+          <option value="Makeup">Make Up</option>
+          <option value="Dokumentasi">Dokumentasi</option>
+          <option value="Undangan">Undangan</option>
+          <option value="Groom">Groom</option>
+          <option value="Bride">Bride</option>
+          <option value="Lainnya">Lainnya</option>
+        </select>
+        <input id="vendorName" type="text" placeholder="Nama Vendor" class="border rounded p-2" required>
+        <select id="paymentType" class="border rounded p-2" required>
+          <option value="" disabled selected>Tipe Pembayaran</option>
+          <option value="Full">Full Payment</option>
+          <option value="DP">DP</option>
+        </select>
+        <input id="dpAmount" type="number" placeholder="Jumlah DP (Rp)" class="border rounded p-2 hidden">
+        <input id="dueDate" type="date" class="border rounded p-2 hidden">
+        <button class="md:col-span-3 bg-pink-500 text-white rounded p-2 hover:bg-pink-600">Tambah Pengeluaran</button>
+      </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card">
+        <h2 class="text-xl font-semibold text-pink-700 mb-2">📊 Grafik Pengeluaran</h2>
+        <canvas id="barChart" height="200"></canvas>
+      </div>
+      <div class="card">
+        <h2 class="text-xl font-semibold text-pink-700 mb-2">🥧 Persentase per Kategori</h2>
+        <canvas id="pieChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="card text-right text-lg font-semibold text-pink-800 space-y-1">
+        <div>Total Pembayaran Full: Rp <span id="totalFull">0</span></div>
+        <div>Total DP Saja: Rp <span id="totalDP">0</span></div>
+        <div class="text-xl text-pink-900 mt-2 border-t pt-2">
+            Total Semua Pengeluaran: 
+            <span class="font-bold text-pink">Rp <span id="totalPaid">0</span></span> 
+            / 
+            <span class="text-pink-800">Rp <span id="totalAmount">0</span></span>
+          </div>
+      </div>
+      
+      
+
+    <!-- Dashboard Sisa Pembayaran -->
+    <div class="card">
+      <h2 class="text-xl font-semibold text-pink-700 mb-2">💰 Sisa Pembayaran dan Tanggal</h2>
+      <div id="paymentDashboard" class="space-y-4 text-gray-700">
+        <!-- Data Sisa Pembayaran akan ditampilkan di sini -->
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="text-xl font-semibold text-pink-700 mb-2">📋 Daftar Pengeluaran</h2>
+      <div class="overflow-auto">
+        <table class="table-auto border w-full text-sm">
+          <thead class="bg-pink-100 text-pink-800">
+            <tr>
+              <th class="p-2 border">Keperluan</th>
+              <th class="p-2 border">Kategori</th>
+              <th class="p-2 border">Nama Vendor</th>
+              <th class="p-2 border">Total</th>
+              <th class="p-2 border">Tipe</th>
+              <th class="p-2 border">DP</th>
+              <th class="p-2 border">Sisa</th>
+              <th class="p-2 border">Pelunasan</th>
+              <th class="p-2 border">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="expenseTableBody" class="text-gray-700"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue, update, get, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCfpK15DaTQyffH3mFQYdryzQ4_v55cJm0",
+      authDomain: "my-project-bf2ad.firebaseapp.com",
+      databaseURL: "https://my-project-bf2ad-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "my-project-bf2ad",
+      storageBucket: "my-project-bf2ad.appspot.com",
+      messagingSenderId: "1087054840531",
+      appId: "1:1087054840531:web:fc6b3937d99fd40448ca26"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const expenseRef = ref(db, 'expenses');
+
+    const form = document.getElementById('expenseForm');
+    const itemInput = document.getElementById('item');
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const paymentType = document.getElementById('paymentType');
+    const dpAmountInput = document.getElementById('dpAmount');
+    const dueDateInput = document.getElementById('dueDate');
+    const totalAmountDisplay = document.getElementById('totalAmount');
+    const expenseTableBody = document.getElementById('expenseTableBody');
+    const paymentDashboard = document.getElementById('paymentDashboard');
+
+    let barChart, pieChart;
+
+    const initCharts = () => {
+      const barCtx = document.getElementById('barChart').getContext('2d');
+      const pieCtx = document.getElementById('pieChart').getContext('2d');
+
+      barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label: 'Jumlah (Rp)', data: [], backgroundColor: '#ec4899' }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+
+      pieChart = new Chart(pieCtx, {
+        type: 'pie',
+        data: { labels: [], datasets: [{ data: [], backgroundColor: ['#f472b6', '#fb7185', '#facc15', '#4ade80', '#60a5fa'] }] },
+        options: { responsive: true }
+      });
+    };
+
+    const updateCharts = (data) => {
+  const barData = {}, pieData = {};
+  let total = 0;
+  let fullTotal = 0;
+  let dpTotal = 0;
+
+  expenseTableBody.innerHTML = '';
+
+  data.forEach(item => {
+    total += item.amount;
+
+    // Hitung total berdasarkan tipe
+    if (item.type === 'Full') {
+      fullTotal += item.amount;
+    } else if (item.type === 'DP') {
+      dpTotal += item.dpAmount || 0;
+    }
+
+    // Bar & Pie chart data
+    barData[item.item] = (barData[item.item] || 0) + item.amount;
+    pieData[item.category] = (pieData[item.category] || 0) + item.amount;
+
+    // Render baris tabel
+    const tr = document.createElement('tr');
+    tr.innerHTML = ` 
+      <td class="border p-2">${item.item}</td>
+      <td class="border p-2">${item.category}</td>
+      <td class="border p-2">${item.vendorName}</td>
+      <td class="border p-2">Rp ${item.amount.toLocaleString('id-ID')}</td>
+      <td class="border p-2">${item.type}</td>
+      <td class="border p-2">Rp ${item.dpAmount ? item.dpAmount.toLocaleString('id-ID') : '0'}</td>
+      <td class="border p-2">Rp ${item.remaining ? item.remaining.toLocaleString('id-ID') : '0'}</td>
+      <td class="border p-2">${item.dueDate || '-'}</td>
+      <td class="border p-2 text-center space-x-2">
+        <button class="text-blue-600 underline" onclick="editExpense('${item.key}')">Edit</button>
+        ${item.remaining > 0 ? `<button class="text-green-600 underline" onclick="markAsPaid('${item.key}', '${item.item}', ${item.amount})">Lunasi</button>` : ''}
+        <button class="text-red-600 underline" onclick="deleteExpense('${item.key}')">Hapus</button>
+      </td>
+    `;
+    expenseTableBody.appendChild(tr);
+  });
+
+  // Update chart
+  barChart.data.labels = Object.keys(barData);
+  barChart.data.datasets[0].data = Object.values(barData);
+  barChart.update();
+
+  pieChart.data.labels = Object.keys(pieData);
+  pieChart.data.datasets[0].data = Object.values(pieData);
+  pieChart.update();
+
+  // Update total summary display
+  document.getElementById('totalFull').textContent = fullTotal.toLocaleString('id-ID');
+  document.getElementById('totalDP').textContent = dpTotal.toLocaleString('id-ID');
+  document.getElementById('totalPaid').textContent = (fullTotal + dpTotal).toLocaleString('id-ID');
+  document.getElementById('totalAmount').textContent = total.toLocaleString('id-ID');
+};
+
+
+    const updatePaymentDashboard = (data) => {
+      paymentDashboard.innerHTML = '';
+      data.forEach(item => {
+        if (item.remaining > 0) {
+          const remaining = item.remaining.toLocaleString('id-ID');
+          const dueDate = item.dueDate ? new Date(item.dueDate).toLocaleDateString('id-ID') : '-';
+          paymentDashboard.innerHTML += `
+            <div class="bg-white p-4 border rounded-md shadow-md">
+              <p class="text-lg font-semibold text-pink-700">${item.item}</p>
+              <p class="text-sm text-gray-600">Sisa Pembayaran: Rp ${remaining}</p>
+              <p class="text-sm text-gray-600">Tanggal Pelunasan: ${dueDate}</p>
+            </div>
+          `;
+        }
+      });
+    };
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const item = itemInput.value;
+      const amount = parseFloat(amountInput.value);
+      const category = categoryInput.value;
+      const type = paymentType.value;
+      const dpAmount = type === 'DP' ? parseFloat(dpAmountInput.value) : 0;
+      const dueDate = type === 'DP' ? dueDateInput.value : null;
+      const remaining = type === 'DP' ? amount - dpAmount : 0;
+      const vendorName = document.getElementById('vendorName').value;
+
+        if (item && amount && category && type && !isNaN(dpAmount) && vendorName) {
+        push(expenseRef, { item, amount, category, type, dpAmount, dueDate, remaining, vendorName });
+        form.reset();
+        dpAmountInput.classList.add('hidden');
+        dueDateInput.classList.add('hidden');
+        }
+    });
+
+    paymentType.addEventListener('change', () => {
+      const isDP = paymentType.value === 'DP';
+      dpAmountInput.classList.toggle('hidden', !isDP);
+      dueDateInput.classList.toggle('hidden', !isDP);
+      if (!isDP) {
+        dpAmountInput.value = '';
+        dueDateInput.value = '';
+      }
+    });
+
+    onValue(expenseRef, (snapshot) => {
+      const data = [];
+      snapshot.forEach(child => {
+        data.push({ key: child.key, ...child.val() });
+      });
+      updateCharts(data);
+      updatePaymentDashboard(data);
+    });
+
+    function formatCurrency(amount) {
+        return `Rp ${amount.toLocaleString('id-ID')}`;
+    }
+
+    window.editExpense = async (key) => {
+        const snapshot = await get(ref(db, 'expenses/' + key));
+        const data = snapshot.val();
+
+        const newItem = await Swal.fire({
+            title: 'Edit Keperluan',
+            input: 'text',
+            inputValue: data.item,
+            showCancelButton: true,
+            confirmButtonColor: '#ec4899',
+            cancelButtonColor: '#6b7280'
+        }).then(result => result.value);
+
+        const newAmount = await Swal.fire({
+            title: 'Edit Jumlah (Rp)',
+            input: 'number',
+            inputValue: data.amount,
+            showCancelButton: true,
+            confirmButtonColor: '#ec4899',
+            cancelButtonColor: '#6b7280'
+        }).then(result => result.value);
+
+        const newCategory = await Swal.fire({
+            title: 'Edit Kategori',
+            input: 'select',
+            inputOptions: {
+            Dekorasi: 'Dekorasi',
+            Makeup: 'Make Up',
+            Dokumentasi: 'Dokumentasi',
+            Undangan: 'Undangan',
+            Groom: 'Groom',
+            Bride: 'Bride',
+            Lainnya: 'Lainnya'
+            },
+            inputValue: data.category,
+            showCancelButton: true,
+            confirmButtonColor: '#ec4899',
+            cancelButtonColor: '#6b7280'
+        }).then(result => result.value);
+
+        if (newItem && !isNaN(newAmount) && newCategory) {
+            const newRemaining = data.type === 'DP' ? newAmount - data.dpAmount : 0;
+            update(ref(db, 'expenses/' + key), {
+            item: newItem,
+            amount: parseFloat(newAmount),
+            category: newCategory,
+            remaining: newRemaining
+            });
+        }
+
+        const newVendorName = await Swal.fire({
+            title: 'Edit Nama Vendor',
+            input: 'text',
+            inputValue: data.vendorName,
+            showCancelButton: true,
+            confirmButtonColor: '#ec4899',
+            cancelButtonColor: '#6b7280'
+        }).then(result => result.value);
+
+        if (newItem && !isNaN(newAmount) && newCategory) {
+            const newRemaining = data.type === 'DP' ? newAmount - data.dpAmount : 0;
+            update(ref(db, 'expenses/' + key), {
+            item: newItem,
+            amount: parseFloat(newAmount),
+            category: newCategory,
+            remaining: newRemaining,
+            vendorName: newVendorName // Update vendor name
+            });
+        }
+        };
+
+        // Fungsi untuk menandai sebagai lunas
+        window.markAsPaid = async (key, item, amount) => {
+        const result = await Swal.fire({
+            title: `Lunasi "${item}"?`,
+            text: `Pembayaran sebesar ${formatCurrency(amount)} telah selesai.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#16a34a',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Lunasi',
+            cancelButtonText: 'Batal'
+        });
+
+        if (result.isConfirmed) {
+            await update(ref(db, 'expenses/' + key), {
+            type: 'Full',
+            dpAmount: amount,
+            remaining: 0,
+            dueDate: null
+            });
+
+            Swal.fire({
+            icon: 'success',
+            title: 'Pembayaran Dilunasi!',
+            confirmButtonColor: '#ec4899'
+            });
+        }
+        };
+
+    window.markAsPaid = async (key, item, amount) => {
+      const result = await Swal.fire({
+        title: `Lunasi "${item}"?`,
+        text: `Pembayaran sebesar Rp ${amount.toLocaleString('id-ID')}`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#16a34a',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Lunasi',
+        cancelButtonText: 'Batal'
+      });
+
+      if (result.isConfirmed) {
+        await update(ref(db, 'expenses/' + key), {
+          type: 'Full',
+          dpAmount: amount,
+          remaining: 0,
+          dueDate: null
+        });
+
+        // const message = `Halo tim, pembayaran untuk *${item}* sebesar *Rp ${amount.toLocaleString('id-ID')}* telah *dilunasi*. ✅`;
+        // const whatsappLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        // window.open(whatsappLink, '_blank');
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Pembayaran Dilunasi!',
+          confirmButtonColor: '#ec4899'
+        });
+      }
+    };
+
+    window.deleteExpense = (key) => {
+      Swal.fire({
+        title: 'Yakin ingin menghapus?',
+        text: 'Data ini akan hilang selamanya!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Ya, hapus!',
+        cancelButtonText: 'Batal'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          remove(ref(db, 'expenses/' + key))
+            .then(() => {
+              Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: 'Data berhasil dihapus.',
+                confirmButtonColor: '#ec4899'
+              });
+            })
+            .catch((error) => {
+              Swal.fire({
+                icon: 'error',
+                title: 'Gagal menghapus!',
+                text: `Terjadi kesalahan: ${error.message}`,
+                confirmButtonColor: '#ec4899'
+              });
+            });
+        }
+      });
+    };
+
+    // Initialize charts on page load
+    initCharts();
+  </script>
+</body>
+</html>
