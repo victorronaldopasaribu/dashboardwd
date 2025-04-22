@@ -32,7 +32,11 @@
 <body class="p-6">
 
   <div class="max-w-6xl mx-auto space-y-6">
-    <h1 class="text-4xl text-center font-bold text-pink-700">💒 Wedding Budget Dashboard</h1>
+    <h1 class="text-4xl text-center font-bold text-pink-700">💒 VN Wedding Dashboard</h1>
+
+    <div id="countdown" class="text-center text-2xl font-semibold text-pink-600 mt-4 bg-white bg-opacity-80 rounded-lg p-4 shadow-md max-w-xl mx-auto">
+      💖 Menuju Hari Bahagia: <br><span id="timer" class="font-bold text-pink-700"></span>
+    </div>
 
     <div class="card">
       <form id="expenseForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -448,6 +452,30 @@
 
     // Initialize charts on page load
     initCharts();
+
+    const countdownTarget = new Date('2025-09-06T00:00:00').getTime();
+    const timerDisplay = document.getElementById('timer');
+
+    function updateCountdown() {
+      const now = new Date().getTime();
+      const distance = countdownTarget - now;
+
+      if (distance < 0) {
+        timerDisplay.innerText = "Selamat Menempuh Hidup Baru! 💍";
+        return;
+      }
+
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      timerDisplay.innerText = `${days} Hari, ${hours} Jam, ${minutes} Menit, ${seconds} Detik 💞`;
+    }
+
+    setInterval(updateCountdown, 1000);
+    updateCountdown(); // Jalankan pertama kali langsung
+
   </script>
 </body>
 </html>
