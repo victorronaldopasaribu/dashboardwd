@@ -30,17 +30,33 @@
     table {
       width: 100%;
     }
-	#calendar {
+#calendar {
     max-width: 100%;
     margin: 0 auto;
+    font-size: 0.85rem;
   }
-  .fc-toolbar-title {
-    font-size: 1.1rem !important;
+
+  .fc-event-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
+
   @media (max-width: 640px) {
+    .fc-daygrid-day-frame {
+      padding: 2px !important;
+    }
+    .fc-daygrid-event {
+      font-size: 0.7rem;
+      padding: 1px 4px;
+    }
+    .fc .fc-daygrid-day-number {
+      font-size: 0.7rem;
+      padding: 0 2px;
+    }
     .fc-toolbar.fc-header-toolbar {
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.3rem;
     }
   }
   </style>
