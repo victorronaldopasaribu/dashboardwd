@@ -73,6 +73,12 @@
 	<div class="card">
   <h2 class="text-xl font-semibold text-pink-700 mb-2">📅 Agenda Kalender</h2>
   <div id="calendar"></div>
+  <div class="mt-6">
+    <h2 class="text-xl font-semibold text-pink-700 mb-2">📝 Daftar Agenda</h2>
+    <ul id="agendaList" class="space-y-2 text-gray-700">
+      <!-- Agenda dari Firebase akan ditampilkan di sini -->
+    </ul>
+  </div>
 </div>
 
 
@@ -584,18 +590,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Load from Firebase
   onValue(agendaRef, (snapshot) => {
-    const events = [];
-    snapshot.forEach(child => {
-      const data = child.val();
-      events.push({
-        id: child.key,
-        title: data.title,
-        start: data.date
-      });
-    });
-    calendar.removeAllEvents();
-    calendar.addEventSource(events);
-  });
+	  const events = [];
+	  const listContainer = document.getElementById('agendaList');
+	  listContainer.innerHTML = ''; // Kosongkan list dulu
+
+	  snapshot.forEach(child => {
+		const data = child.val();
+		events.push({
+		  id: child.key,
+		  title: data.title,
+		  start: data.date
+		});
+
+		const listItem = document.createElement('li');
+		listItem.className = "bg-white bg-opacity-70 border-l-4 border-pink-400 p-3 rounded shadow hover:shadow-md transition";
+		listItem.innerHTML = `<strong class="text-pink-700">${new Date(data.date).toLocaleDateString('id-ID')}</strong>: ${data.title}`;
+		listContainer.appendChild(listItem);
+	  });
+
+	  calendar.removeAllEvents();
+	  calendar.addEventSource(events);
+	});
 });
 
   </script>
