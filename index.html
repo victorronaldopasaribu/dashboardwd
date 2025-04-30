@@ -590,27 +590,63 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Load from Firebase
   onValue(agendaRef, (snapshot) => {
-	  const events = [];
-	  const listContainer = document.getElementById('agendaList');
-	  listContainer.innerHTML = ''; // Kosongkan list dulu
+  const events = [];
+  const listContainer = document.getElementById('agendaList');
+  listContainer.innerHTML = ''; // Kosongkan list
 
-	  snapshot.forEach(child => {
-		const data = child.val();
-		events.push({
-		  id: child.key,
-		  title: data.title,
-		  start: data.date
-		});
+  const now = new Date();
+  const futureAgendas = [];
+  const pastAgendas = []; // Tambahkan array untuk menyimpan agenda yang sudah lewat
 
-		const listItem = document.createElement('li');
-		listItem.className = "bg-white bg-opacity-70 border-l-4 border-pink-400 p-3 rounded shadow hover:shadow-md transition";
-		listItem.innerHTML = `<strong class="text-pink-700">${new Date(data.date).toLocaleDateString('id-ID')}</strong>: ${data.title}`;
-		listContainer.appendChild(listItem);
-	  });
+  snapshot.forEach(child => {
+    const data = child.val();
+    const date = new Date(data.date);
+    const diffTime = date - now;
 
-	  calendar.removeAllEvents();
-	  calendar.addEventSource(events);
-	});
+    // Simpan agenda yang sudah lewat di pastAgendas, yang akan datang di futureAgendas
+    const agenda = {
+      id: child.key,
+      title: data.title,
+      date: data.date,
+      diffTime,
+      daysRemaining: Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    };
+
+    if (diffTime >= 0) {
+      futureAgendas.push(agenda);
+    } else {
+      pastAgendas.push(agenda); // Simpan agenda yang sudah lewat
+    }
+
+    // Tambahkan agenda ke kalender, tetap masukkan agenda meskipun sudah lewat
+    events.push({
+      id: child.key,
+      title: data.title,
+      start: data.date
+    });
+  });
+
+  // Urutkan futureAgendas berdasarkan tanggal terdekat
+  futureAgendas.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Tampilkan hanya agenda yang akan datang di list
+  futureAgendas.forEach(agenda => {
+    const listItem = document.createElement('li');
+    listItem.className = "bg-white bg-opacity-70 border-l-4 border-pink-400 p-3 rounded shadow hover:shadow-md transition";
+    listItem.innerHTML = `
+      <div class="text-sm text-gray-500">${new Date(agenda.date).toLocaleDateString('id-ID')} (${agenda.daysRemaining} hari lagi)</div>
+      <div class="font-semibold text-pink-700">${agenda.title}</div>
+    `;
+    listContainer.appendChild(listItem);
+  });
+
+  // Update kalender dengan semua agenda (termasuk yang sudah lewat)
+  calendar.removeAllEvents();
+  calendar.addEventSource(events);
+});
+
+
+
 });
 
   </script>
